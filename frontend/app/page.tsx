@@ -1,213 +1,263 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Search, Star, LogOut, Film, Mail } from "lucide-react";
+import { Search, Star, Film, LogOut, Mail, Lock, UserPlus, ArrowRight } from "lucide-react";
 
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+// USE YOUR LOCAL CODESPACE URL HERE (Port 8000)
+const API_URL = "https://literate-space-waddle-8000.app.github.dev"; 
 
 export default function Home() {
   const [session, setSession] = useState<any>(null);
+  
+  // App States
+  const [view, setView] = useState<"home" | "onboarding">("home");
   const [movies, setMovies] = useState<any[]>([]);
   const [recs, setRecs] = useState<any[]>([]);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(false);
   
-  // NEW: State for Email Login
+  // Auth States
+  const [authMode, setAuthMode] = useState<"login" | "signup" | "forgot">("login");
   const [email, setEmail] = useState("");
-  const [magicLinkSent, setMagicLinkSent] = useState(false);
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if(session) fetchRecs(session.user.id);
+      if(session) checkUserStatus(session.user.id);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if(session) fetchRecs(session.user.id);
+      if(session) checkUserStatus(session.user.id);
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
-  // --- NEW LOGIN FUNCTION (Magic Link) ---
-  const handleLogin = async (e: React.FormEvent) => {
+  // Check if user is new or has history
+  const checkUserStatus = async (userId: string) => {
+    const res = await fetch(`${API_URL}/recommendations/${userId}`);
+    const data = await res.json();
+    
+    if (data.length === 0) {
+      setView("onboarding");
+      loadPopularMovies();
+    } else {
+      setView("home");
+      setRecs(data);
+    }
+  };
+
+  const loadPopularMovies = async () => {
+    const res = await fetch(`${API_URL}/popular`);
+    const data = await res.json();
+    setMovies(data); // Re-using movies state for onboarding list
+  };
+
+  // --- AUTH HANDLERS ---
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({ email });
-    if (error) {
-      alert("Error logging in: " + error.message);
-    } else {
-      setMagicLinkSent(true);
+    let error;
+
+    if (authMode === "signup") {
+      const res = await supabase.auth.signUp({ email, password });
+      error = res.error;
+      if (!error) alert("Check your email to confirm signup!");
+    } else if (authMode === "login") {
+      const res = await supabase.auth.signInWithPassword({ email, password });
+      error = res.error;
+    } else if (authMode === "forgot") {
+      const res = await supabase.auth.resetPasswordForEmail(email);
+      error = res.error;
+      if (!error) alert("Password reset link sent to email.");
     }
+
+    if (error) alert(error.message);
     setLoading(false);
   };
 
-  const logout = async () => {
-    await supabase.auth.signOut();
-    setMagicLinkSent(false);
-    setEmail("");
-  };
-
-  // --- APP FUNCTIONS ---
+  // --- APP HANDLERS ---
   const handleSearch = async () => {
     if(!search) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/search?query=${search}`);
-      const data = await res.json();
-      setMovies(data);
-    } catch (e) {
-      console.error("Backend offline?", e);
-    }
-    setLoading(false);
+    const res = await fetch(`${API_URL}/search?query=${search}`);
+    const data = await res.json();
+    setMovies(data);
   };
 
   const rateMovie = async (movieId: number, rating: number) => {
-    if (!session) return alert("Please login to rate!");
+    if (!session) return;
+    
+    // Optimistic UI: Remove from list if in onboarding
+    if(view === "onboarding") {
+      setMovies(movies.filter(m => m.movieId !== movieId));
+    }
+
     await fetch(`${API_URL}/rate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        user_id: session.user.id, 
-        movie_id: movieId, 
-        rating 
-      }),
+      body: JSON.stringify({ user_id: session.user.id, movie_id: movieId, rating }),
     });
-    fetchRecs(session.user.id);
+
+    // If in onboarding, count ratings or refresh recs
+    if (view === "home") checkUserStatus(session.user.id);
   };
 
-  const fetchRecs = async (userId: string) => {
-    try {
-      const res = await fetch(`${API_URL}/recommendations/${userId}`);
-      const data = await res.json();
-      setRecs(data);
-    } catch (e) {
-      console.error("Error fetching recs", e);
-    }
-  };
+  const finishOnboarding = () => checkUserStatus(session.user.id);
 
-  // --- LOGIN SCREEN ---
+  // --- RENDER: AUTH SCREEN ---
   if (!session) {
     return (
-      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4">
-        <h1 className="text-5xl font-bold text-red-600 mb-6">MovieMind AI 🧠</h1>
-        <p className="mb-8 text-gray-400 text-center max-w-md">
-          Collaborative Filtering + Content-Based Recommendation System.
-        </p>
-        
-        <div className="bg-gray-900 p-8 rounded-xl border border-gray-800 w-full max-w-sm">
-          {!magicLinkSent ? (
-            <form onSubmit={handleLogin} className="flex flex-col gap-4">
-              <label className="text-sm font-bold text-gray-400">Sign in with Email</label>
-              <input 
-                type="email" 
-                placeholder="student@university.edu" 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="p-3 rounded bg-gray-800 border border-gray-700 focus:border-red-500 outline-none text-white"
-                required
-              />
-              <button 
-                type="submit" 
-                disabled={loading}
-                className="bg-red-600 text-white p-3 rounded font-bold hover:bg-red-700 transition flex justify-center items-center gap-2"
-              >
-                {loading ? "Sending..." : <><Mail size={18}/> Send Magic Link</>}
-              </button>
-            </form>
-          ) : (
-            <div className="text-center">
-              <div className="mx-auto bg-green-900/30 text-green-400 w-12 h-12 rounded-full flex items-center justify-center mb-4 border border-green-800">
-                <Mail />
-              </div>
-              <h3 className="text-xl font-bold mb-2">Check your email!</h3>
-              <p className="text-gray-400 text-sm">We sent a login link to <br/><span className="text-white">{email}</span></p>
-              <button onClick={() => setMagicLinkSent(false)} className="mt-6 text-sm text-gray-500 hover:text-white underline">
-                Try a different email
-              </button>
+      <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-800 via-gray-950 to-black text-white flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-gray-900/80 backdrop-blur-md p-8 rounded-2xl border border-gray-800 shadow-2xl">
+          <div className="flex justify-center mb-6">
+            <Film size={48} className="text-red-600" />
+          </div>
+          <h1 className="text-3xl font-bold text-center mb-2">MovieMind AI</h1>
+          <p className="text-center text-gray-400 mb-8 text-sm">
+            {authMode === "login" ? "Welcome back, cinephile." : authMode === "signup" ? "Create your AI profile." : "Reset your password."}
+          </p>
+
+          <form onSubmit={handleAuth} className="space-y-4">
+            <div className="relative">
+              <Mail className="absolute left-3 top-3 text-gray-500" size={18} />
+              <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg py-3 pl-10 focus:border-red-500 outline-none" required />
             </div>
-          )}
+            
+            {authMode !== "forgot" && (
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 text-gray-500" size={18} />
+                <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg py-3 pl-10 focus:border-red-500 outline-none" required />
+              </div>
+            )}
+
+            <button disabled={loading} className="w-full bg-red-600 hover:bg-red-700 py-3 rounded-lg font-bold transition flex justify-center">
+              {loading ? "Processing..." : authMode === "login" ? "Sign In" : authMode === "signup" ? "Sign Up" : "Send Reset Link"}
+            </button>
+          </form>
+
+          <div className="mt-6 flex justify-between text-sm text-gray-400">
+            {authMode === "login" ? (
+              <>
+                <button onClick={() => setAuthMode("signup")} className="hover:text-white">Create Account</button>
+                <button onClick={() => setAuthMode("forgot")} className="hover:text-white">Forgot Password?</button>
+              </>
+            ) : (
+              <button onClick={() => setAuthMode("login")} className="hover:text-white w-full text-center">Back to Login</button>
+            )}
+          </div>
         </div>
       </div>
     );
   }
 
-  // --- MAIN APP SCREEN ---
+  // --- RENDER: MAIN APP ---
   return (
-    <div className="min-h-screen bg-gray-950 text-white font-sans">
-      <nav className="border-b border-gray-800 p-6 flex justify-between items-center bg-gray-900 sticky top-0 z-50">
+    <div className="min-h-screen bg-black text-white font-sans selection:bg-red-900">
+      {/* Navbar */}
+      <nav className="border-b border-gray-900 bg-black/50 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex justify-between items-center">
         <div className="flex items-center gap-2">
-           <Film className="text-red-500" />
-           <h1 className="text-xl font-bold">MovieMind <span className="text-xs bg-red-600 px-2 py-0.5 rounded text-white ml-2">v2.0</span></h1>
+          <Film className="text-red-600" />
+          <span className="font-bold text-xl tracking-tight">MovieMind</span>
         </div>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-400 hidden sm:block">{session.user.email}</span>
-          <button onClick={logout} className="p-2 bg-gray-800 rounded-full hover:bg-red-900 transition"><LogOut size={18}/></button>
-        </div>
+        <button onClick={() => supabase.auth.signOut()} className="bg-gray-900 hover:bg-gray-800 p-2 rounded-full transition">
+          <LogOut size={18} />
+        </button>
       </nav>
 
-      <main className="p-6 max-w-6xl mx-auto">
-        {/* SEARCH SECTION */}
-        <section className="mb-12">
-          <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-            <Search className="text-blue-400"/> Search & Rate
-          </h2>
-          <div className="flex gap-2 mb-6">
-            <input 
-              className="flex-1 p-3 rounded-lg bg-gray-800 border border-gray-700 focus:border-blue-500 focus:outline-none"
-              placeholder="Search movies (e.g. Inception)..." 
-              value={search} 
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            />
-            <button onClick={handleSearch} disabled={loading} className="bg-blue-600 px-6 rounded-lg font-bold hover:bg-blue-500 transition">
-              {loading ? "..." : "Search"}
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {movies.map((m) => (
-              <div key={m.movieId} className="bg-gray-900 p-4 rounded-xl border border-gray-800">
-                <h3 className="font-bold text-lg text-gray-100">{m.title}</h3>
-                <p className="text-sm text-gray-500 mb-3">{m.genres}</p>
-                <div className="flex gap-1 justify-center bg-gray-800 p-2 rounded-lg">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button key={star} onClick={() => rateMovie(m.movieId, star)} className="hover:scale-125 transition">
-                      <Star size={20} className="text-yellow-500 fill-yellow-500/20 hover:fill-yellow-500" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* RECOMMENDATIONS SECTION */}
-        <section>
-          <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-            <span className="text-3xl">✨</span> Recommended for You
-          </h2>
-          {recs.length === 0 ? (
-            <div className="text-center p-10 bg-gray-900 rounded-xl border border-dashed border-gray-700">
-              <p className="text-gray-400">Rate some movies above to get AI recommendations!</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {recs.map((m) => (
-                <div key={m.movieId} className="relative group bg-gradient-to-br from-gray-900 to-gray-800 p-5 rounded-xl border border-gray-700 hover:border-green-500 transition-all hover:-translate-y-1 shadow-lg">
-                  <div className="absolute top-2 right-2 bg-green-900/50 text-green-400 text-xs font-mono px-2 py-1 rounded border border-green-700/50">
-                    {m.score} Match
-                  </div>
-                  <h3 className="font-bold text-lg mt-4 leading-tight min-h-[3rem]">{m.title}</h3>
-                  <p className="text-xs text-gray-400 mt-2">{m.genres}</p>
-                </div>
+      <main className="max-w-7xl mx-auto p-6">
+        
+        {/* VIEW: ONBOARDING */}
+        {view === "onboarding" && (
+          <div className="text-center py-10">
+            <h2 className="text-3xl font-bold mb-2">Let's get to know you.</h2>
+            <p className="text-gray-400 mb-8">Rate at least 3 movies so we can build your AI model.</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
+              {movies.map(m => (
+                 <MovieCard key={m.movieId} movie={m} onRate={rateMovie} />
               ))}
             </div>
-          )}
-        </section>
+            <button onClick={finishOnboarding} className="bg-white text-black px-8 py-3 rounded-full font-bold hover:bg-gray-200 transition flex items-center gap-2 mx-auto">
+              Get Recommendations <ArrowRight size={18}/>
+            </button>
+          </div>
+        )}
+
+        {/* VIEW: HOME DASHBOARD */}
+        {view === "home" && (
+          <>
+            {/* Search Bar */}
+            <div className="relative max-w-2xl mx-auto mb-12">
+              <Search className="absolute left-4 top-4 text-gray-500" />
+              <input 
+                placeholder="Search for movies..." 
+                className="w-full bg-gray-900 border border-gray-800 rounded-full py-4 pl-12 pr-4 focus:ring-2 focus:ring-red-900 outline-none transition"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+              />
+            </div>
+
+            {/* Search Results */}
+            {search && movies.length > 0 && (
+              <section className="mb-12">
+                <h3 className="text-gray-400 font-bold mb-4 uppercase text-sm tracking-wider">Search Results</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                  {movies.map(m => <MovieCard key={m.movieId} movie={m} onRate={rateMovie} />)}
+                </div>
+              </section>
+            )}
+
+            {/* Recommendations */}
+            <section>
+              <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+                Top Picks for You <span className="text-xs bg-green-900 text-green-400 px-2 py-0.5 rounded border border-green-800">AI Generated</span>
+              </h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                 {recs.map((m, i) => (
+                   <div key={m.movieId} className="group relative bg-gray-900 rounded-lg overflow-hidden border border-gray-800 hover:border-red-800 transition shadow-lg">
+                     {/* Pseudo Poster Placeholder */}
+                     <div className="h-48 bg-gray-800 flex items-center justify-center text-gray-700 font-bold text-4xl select-none group-hover:bg-gray-700 transition">
+                       {m.title[0]}
+                     </div>
+                     <div className="p-4">
+                       <h3 className="font-bold text-sm truncate">{m.title}</h3>
+                       <p className="text-xs text-gray-500 mb-2 truncate">{m.genres}</p>
+                       <div className="flex justify-between items-center">
+                         <span className="text-xs font-mono text-green-400">{m.score > 5 ? "98%" : "85%"} Match</span>
+                         <div className="flex gap-0.5">
+                           {[1,2,3,4,5].map(s => (
+                             <button key={s} onClick={() => rateMovie(m.movieId, s)} className="text-gray-600 hover:text-yellow-500 text-xs">★</button>
+                           ))}
+                         </div>
+                       </div>
+                     </div>
+                   </div>
+                 ))}
+              </div>
+            </section>
+          </>
+        )}
       </main>
+    </div>
+  );
+}
+
+// Sub-component for Cleaner Code
+function MovieCard({ movie, onRate }: { movie: any, onRate: any }) {
+  return (
+    <div className="bg-gray-900 p-4 rounded-xl border border-gray-800 hover:scale-105 transition duration-300">
+      <h4 className="font-bold text-sm h-10 overflow-hidden text-gray-200">{movie.title}</h4>
+      <p className="text-xs text-gray-500 mb-3 truncate">{movie.genres}</p>
+      <div className="flex justify-center gap-1 bg-black/30 p-1.5 rounded-lg">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button key={star} onClick={() => onRate(movie.movieId, star)} className="text-gray-600 hover:text-yellow-500 transition hover:scale-125">
+            <Star size={14} fill="currentColor" />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

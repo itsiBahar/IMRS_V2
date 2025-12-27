@@ -3,85 +3,67 @@ import pandas as pd
 import os
 import random
 
-# Get the path to the backend folder
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-print("Loading Content-Based Models...")
-
-# Load ONLY the lightweight models
-# (We removed svd_model.pkl)
+print("Loading FULL Hybrid Models (SVD + Content)...")
+svd = joblib.load(os.path.join(BASE_DIR, 'svd_model.pkl'))
 cosine_sim = joblib.load(os.path.join(BASE_DIR, 'cosine_sim.pkl'))
 movies = joblib.load(os.path.join(BASE_DIR, 'movies_metadata.pkl'))
 indices = joblib.load(os.path.join(BASE_DIR, 'indices.pkl'))
-
-print("Models Loaded Successfully!")
+print("Models Loaded.")
 
 def search_movies(query):
-    """Simple search function"""
     mask = movies['title'].str.contains(query, case=False, na=False)
-    return movies[mask].head(10)[['movieId', 'title', 'genres']].to_dict('records')
+    return movies[mask].head(20)[['movieId', 'title', 'genres']].to_dict('records')
+
+def get_popular_movies(n=20):
+    """Return a mix of popular genres for the onboarding screen"""
+    # A simple way to get diverse movies is to sample
+    return movies.sample(n=n)[['movieId', 'title', 'genres']].to_dict('records')
 
 def hybrid_recommendation(user_id, user_ratings_history, top_n=12):
-    """
-    Lite Mode Logic (Content-Based Only):
-    1. If user has no history -> Return Popular/Random movies.
-    2. If user has history -> Find movies similar to the ones they rated 5 stars.
-    """
-    
-    # COLD START: No history, return random mix
+    # COLD START: User has rated 0 movies
     if not user_ratings_history:
-        return movies.sample(n=top_n)[['movieId', 'title', 'genres']].to_dict('records')
+        return [] # Return empty list to trigger "Onboarding Mode" in Frontend
 
-    # Get movies the user LIKED (4.0 or higher)
+    rated_movie_ids = set([r['movie_id'] for r in user_ratings_history])
+    all_movie_ids = movies['movieId'].unique()
+    movies_to_predict = [mid for mid in all_movie_ids if mid not in rated_movie_ids]
+    
+    # Speed up: Only predict for a random sample of 1000 movies
+    candidates = random.sample(list(movies_to_predict), min(len(movies_to_predict), 1000))
+    
     liked_movies = [r['movie_id'] for r in user_ratings_history if r['rating'] >= 4.0]
-    
-    # If user has history but no 'Likes', just use their last watched movie
-    if not liked_movies:
-        liked_movies = [user_ratings_history[-1]['movie_id']]
+    predictions = []
 
-    # Content-Based Logic
-    similar_scores = []
-    
-    # Look at the last 3 liked movies to find similarities
-    for movie_id in liked_movies[-3:]:
-        if movie_id in indices:
-            idx = indices[movie_id]
-            # Get similarity scores from the matrix
-            sim_scores = list(enumerate(cosine_sim[idx]))
-            # Get top 5 similar for each liked movie
-            sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
-            similar_scores.extend(sim_scores[1:6])
-            
-    # Sort all collected candidates by score
-    similar_scores = sorted(similar_scores, key=lambda x: x[1], reverse=True)
-    
-    # Remove duplicates (using a set)
-    seen = set()
-    final_recs = []
-    
-    for idx, score in similar_scores:
-        movie_id = movies.iloc[idx]['movieId']
-        # Don't recommend movies they already watched
-        has_watched = any(r['movie_id'] == movie_id for r in user_ratings_history)
+    for mid in candidates:
+        # 1. Collaborative Score (SVD)
+        # We use a dummy uid because SVD was trained on integers, but we just need the model weights
+        est = svd.predict(uid=0, iid=mid).est 
         
-        if movie_id not in seen and not has_watched:
-            seen.add(movie_id)
-            final_recs.append({
-                "movieId": int(movie_id),
-                "title": movies.iloc[idx]['title'],
-                "genres": movies.iloc[idx]['genres'],
-                "score": round(score * 100, 0) # Score as percentage
-            })
-            
-        if len(final_recs) >= top_n:
-            break
-            
-    # If we still don't have enough, fill with random ones
-    if len(final_recs) < top_n:
-        remaining = top_n - len(final_recs)
-        extras = movies.sample(n=remaining)[['movieId', 'title', 'genres']].to_dict('records')
-        for m in extras:
-            m['score'] = 0
-            final_recs.append(m)
-
-    return final_recs
+        # 2. Content Boost
+        boost = 0
+        if mid in indices and liked_movies:
+            idx = indices[mid]
+            # Check similarity with the last movie user liked
+            last_liked = liked_movies[-1]
+            if last_liked in indices:
+                sim_score = cosine_sim[idx][indices[last_liked]]
+                boost = sim_score * 1.5 
+        
+        final_score = est + boost
+        predictions.append((mid, final_score))
+        
+    predictions.sort(key=lambda x: x[1], reverse=True)
+    top_candidates = predictions[:top_n]
+    
+    results = []
+    for mid, score in top_candidates:
+        row = movies[movies['movieId'] == mid].iloc[0]
+        results.append({
+            "movieId": int(row['movieId']),
+            "title": row['title'],
+            "genres": row['genres'],
+            "score": round(score, 2)
+        })
+    return results
