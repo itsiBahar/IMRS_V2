@@ -3,9 +3,8 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Search, Star, LogOut, Film, Mail } from "lucide-react";
 
-// ⚠️ REPLACE WITH YOUR BACKEND URL (FROM PORTS TAB, PORT 8000)
-// Example: https://literate-space-waddle-8000.app.github.dev
-const API_URL = "https://ubiquitous-halibut-pp6v7vjg6gq36pr5-8000.app.github.dev"; 
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 export default function Home() {
   const [session, setSession] = useState<any>(null);
