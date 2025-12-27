@@ -1,13 +1,10 @@
-cython
-wheel
-setuptools
-numpy<2.0.0
-fastapi
-uvicorn
-pandas
+numpy==1.26.4
+pandas==2.2.0
 scikit-learn
 scikit-surprise
 joblib
+fastapi
+uvicorn
 supabase
 python-multipart
 pydantic
