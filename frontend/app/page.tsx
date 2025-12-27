@@ -1,20 +1,24 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Search, Star, LogOut, Film } from "lucide-react";
+import { Search, Star, LogOut, Film, Mail } from "lucide-react";
 
-// ⚠️ REPLACE THIS WITH YOUR BACKEND URL (FROM PORTS TAB, PORT 8000)
+// ⚠️ REPLACE WITH YOUR BACKEND URL (FROM PORTS TAB, PORT 8000)
+// Example: https://literate-space-waddle-8000.app.github.dev
 const API_URL = "https://ubiquitous-halibut-pp6v7vjg6gq36pr5-8000.app.github.dev"; 
 
 export default function Home() {
   const [session, setSession] = useState<any>(null);
-  const [movies, setMovies] = useState<any[]>([]); // Search results
-  const [recs, setRecs] = useState<any[]>([]);     // Recommendations
+  const [movies, setMovies] = useState<any[]>([]);
+  const [recs, setRecs] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  
+  // NEW: State for Email Login
+  const [email, setEmail] = useState("");
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
 
   useEffect(() => {
-    // Check if user is logged in
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if(session) fetchRecs(session.user.id);
@@ -28,11 +32,26 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const login = async () => supabase.auth.signInWithOAuth({ provider: 'github' }); // Using GitHub for easy demo
-  const logout = async () => supabase.auth.signOut();
+  // --- NEW LOGIN FUNCTION (Magic Link) ---
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithOtp({ email });
+    if (error) {
+      alert("Error logging in: " + error.message);
+    } else {
+      setMagicLinkSent(true);
+    }
+    setLoading(false);
+  };
 
-  // --- FUNCTIONS ---
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setMagicLinkSent(false);
+    setEmail("");
+  };
 
+  // --- APP FUNCTIONS ---
   const handleSearch = async () => {
     if(!search) return;
     setLoading(true);
@@ -48,10 +67,6 @@ export default function Home() {
 
   const rateMovie = async (movieId: number, rating: number) => {
     if (!session) return alert("Please login to rate!");
-    
-    // Optimistic UI update (optional)
-    alert(`Rated ${rating} Stars! Updating recommendations...`);
-
     await fetch(`${API_URL}/rate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -61,8 +76,6 @@ export default function Home() {
         rating 
       }),
     });
-    
-    // Refresh recommendations after rating
     fetchRecs(session.user.id);
   };
 
@@ -76,26 +89,55 @@ export default function Home() {
     }
   };
 
-  // --- UI RENDER ---
-
+  // --- LOGIN SCREEN ---
   if (!session) {
     return (
       <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4">
         <h1 className="text-5xl font-bold text-red-600 mb-6">MovieMind AI 🧠</h1>
         <p className="mb-8 text-gray-400 text-center max-w-md">
-          A Machine Learning project that learns your taste. <br/>
-          Collaborative Filtering + Content-Based Analysis.
+          Collaborative Filtering + Content-Based Recommendation System.
         </p>
-        <button onClick={login} className="bg-white text-black px-6 py-3 rounded-full font-bold hover:bg-gray-200 transition">
-          Login with GitHub to Start
-        </button>
+        
+        <div className="bg-gray-900 p-8 rounded-xl border border-gray-800 w-full max-w-sm">
+          {!magicLinkSent ? (
+            <form onSubmit={handleLogin} className="flex flex-col gap-4">
+              <label className="text-sm font-bold text-gray-400">Sign in with Email</label>
+              <input 
+                type="email" 
+                placeholder="student@university.edu" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="p-3 rounded bg-gray-800 border border-gray-700 focus:border-red-500 outline-none text-white"
+                required
+              />
+              <button 
+                type="submit" 
+                disabled={loading}
+                className="bg-red-600 text-white p-3 rounded font-bold hover:bg-red-700 transition flex justify-center items-center gap-2"
+              >
+                {loading ? "Sending..." : <><Mail size={18}/> Send Magic Link</>}
+              </button>
+            </form>
+          ) : (
+            <div className="text-center">
+              <div className="mx-auto bg-green-900/30 text-green-400 w-12 h-12 rounded-full flex items-center justify-center mb-4 border border-green-800">
+                <Mail />
+              </div>
+              <h3 className="text-xl font-bold mb-2">Check your email!</h3>
+              <p className="text-gray-400 text-sm">We sent a login link to <br/><span className="text-white">{email}</span></p>
+              <button onClick={() => setMagicLinkSent(false)} className="mt-6 text-sm text-gray-500 hover:text-white underline">
+                Try a different email
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
 
+  // --- MAIN APP SCREEN ---
   return (
     <div className="min-h-screen bg-gray-950 text-white font-sans">
-      {/* Header */}
       <nav className="border-b border-gray-800 p-6 flex justify-between items-center bg-gray-900 sticky top-0 z-50">
         <div className="flex items-center gap-2">
            <Film className="text-red-500" />
@@ -108,8 +150,7 @@ export default function Home() {
       </nav>
 
       <main className="p-6 max-w-6xl mx-auto">
-        
-        {/* Search Section */}
+        {/* SEARCH SECTION */}
         <section className="mb-12">
           <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
             <Search className="text-blue-400"/> Search & Rate
@@ -117,7 +158,7 @@ export default function Home() {
           <div className="flex gap-2 mb-6">
             <input 
               className="flex-1 p-3 rounded-lg bg-gray-800 border border-gray-700 focus:border-blue-500 focus:outline-none"
-              placeholder="Search for movies you have watched (e.g., Avengers, Frozen)..." 
+              placeholder="Search movies (e.g. Inception)..." 
               value={search} 
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -144,12 +185,11 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Recommendations Section */}
+        {/* RECOMMENDATIONS SECTION */}
         <section>
           <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
             <span className="text-3xl">✨</span> Recommended for You
           </h2>
-          
           {recs.length === 0 ? (
             <div className="text-center p-10 bg-gray-900 rounded-xl border border-dashed border-gray-700">
               <p className="text-gray-400">Rate some movies above to get AI recommendations!</p>
