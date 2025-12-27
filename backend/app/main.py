@@ -7,8 +7,8 @@ from supabase import create_client, Client
 app = FastAPI()
 
 # PASTE YOUR SUPABASE KEYS HERE
-SUPABASE_URL = "YOUR_SUPABASE_URL"
-SUPABASE_KEY = "YOUR_SUPABASE_KEY"
+SUPABASE_URL = "https://zvopidktxwbicqkoxwhk.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp2b3BpZGt0eHdiaWNxa294d2hrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY4MTQ4MjgsImV4cCI6MjA4MjM5MDgyOH0.WSVHJoMwcUvCvs72zbwDejFJfMq-qwYz6zohy8xftZc"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app.add_middleware(
