@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from app.recommender import search_movies, hybrid_recommendation, get_popular_movies
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,32 +24,57 @@ class RatingPayload(BaseModel):
     movie_id: int
     rating: float
 
+class WatchlistPayload(BaseModel):
+    user_id: str
+    movie_id: int
+    status: str # 'watched' or 'plan_to_watch'
+
 @app.get("/")
-def home():
-    return {"status": "Hybrid ML Brain is Active"}
+def home(): return {"status": "Online"}
 
 @app.get("/search")
-def search(query: str):
-    return search_movies(query)
+def search(query: str): return search_movies(query)
 
 @app.get("/popular")
 def popular():
-    return get_popular_movies()
+    # Returns 12 random popular movies
+    return get_popular_movies(n=12)
+
+@app.get("/user_stats/{user_id}")
+def user_stats(user_id: str):
+    # Check how many movies the user has actually rated
+    res = supabase.table('ratings').select('*', count='exact').eq('user_id', user_id).execute()
+    return {"rated_count": res.count}
 
 @app.post("/rate")
 def rate_movie(payload: RatingPayload):
-    try:
-        # Upsert: Update if exists, Insert if new
-        supabase.table('ratings').upsert({
-            "user_id": payload.user_id, 
-            "movie_id": payload.movie_id, 
-            "rating": payload.rating
-        }, on_conflict="user_id, movie_id").execute()
-        return {"message": "Saved"}
-    except Exception as e:
-        return {"error": str(e)}
+    supabase.table('ratings').upsert({
+        "user_id": payload.user_id, "movie_id": payload.movie_id, "rating": payload.rating
+    }, on_conflict="user_id, movie_id").execute()
+    return {"message": "Saved"}
+
+@app.post("/watchlist")
+def update_watchlist(payload: WatchlistPayload):
+    supabase.table('watchlist').upsert({
+        "user_id": payload.user_id, "movie_id": payload.movie_id, "status": payload.status
+    }, on_conflict="user_id, movie_id").execute()
+    return {"message": "Added to watchlist"}
+
+@app.get("/watchlist/{user_id}")
+def get_watchlist(user_id: str):
+    res = supabase.table('watchlist').select('*').eq('user_id', user_id).execute()
+    # We need to fetch movie details for these IDs
+    # (In a real app, we'd do a SQL join, but for now let's use the frontend to map IDs)
+    return res.data
 
 @app.get("/recommendations/{user_id}")
 def get_recommendations(user_id: str):
+    # Fetch history
     response = supabase.table('ratings').select("*").eq('user_id', user_id).execute()
-    return hybrid_recommendation(user_id, response.data)
+    history = response.data
+    
+    # If less than 3 ratings, return empty to trigger Onboarding
+    if len(history) < 3:
+        return []
+        
+    return hybrid_recommendation(user_id, history)
