@@ -1,0 +1,25 @@
+name: Sync to Hugging Face hub
+on:
+  push:
+    branches: [main]  # Or 'master' if your branch is named master
+
+# This prevents multiple syncs running at once
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync-to-hub:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          lfs: true # Important for your .pkl model files!
+      - name: Push to hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # ⚠️ REPLACE 'YOUR_USERNAME' AND 'YOUR_SPACE_NAME' BELOW
+          git remote add space https://itsiBahar:$HF_TOKEN@huggingface.co/spaces/itsiBahar/MovieMind
+          git push --force space main
