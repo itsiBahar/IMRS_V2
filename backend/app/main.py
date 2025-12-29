@@ -8,7 +8,7 @@ app = FastAPI()
 
 # PASTE YOUR SUPABASE KEYS HERE
 SUPABASE_URL = "https://zvopidktxwbicqkoxwhk.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp2b3BpZGt0eHdiaWNxa294d2hrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY4MTQ4MjgsImV4cCI6MjA4MjM5MDgyOH0.WSVHJoMwcUvCvs72zbwDejFJfMq-qwYz6zohy8xftZc"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp2b3BpZGt0eHdiaWNxa294d2hrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NjgxNDgyOCwiZXhwIjoyMDgyMzkwODI4fQ.cdTu1OH_XFhsgEjMJns9_riuIphDHe7_lnJ9OUn86Sc"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app.add_middleware(
@@ -46,12 +46,24 @@ def user_stats(user_id: str):
     res = supabase.table('ratings').select('*', count='exact').eq('user_id', user_id).execute()
     return {"rated_count": res.count}
 
+# In backend/app/main.py
+
 @app.post("/rate")
 def rate_movie(payload: RatingPayload):
-    supabase.table('ratings').upsert({
-        "user_id": payload.user_id, "movie_id": payload.movie_id, "rating": payload.rating
-    }, on_conflict="user_id, movie_id").execute()
-    return {"message": "Saved"}
+    try:
+        # Try to save data
+        response = supabase.table('ratings').upsert({
+            "user_id": payload.user_id, 
+            "movie_id": payload.movie_id, 
+            "rating": payload.rating
+        }, on_conflict="user_id, movie_id").execute()
+        
+        return {"message": "Saved", "data": response.data}
+
+    except Exception as e:
+        # If it crashes, print the error to the Terminal AND send it to the Frontend
+        print(f"\n🔥 CRITICAL ERROR: {str(e)}\n")
+        raise HTTPException(status_code=400, detail=f"Database Error: {str(e)}")
 
 @app.post("/watchlist")
 def update_watchlist(payload: WatchlistPayload):
