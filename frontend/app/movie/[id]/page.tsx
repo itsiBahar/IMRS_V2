@@ -9,8 +9,8 @@ const API_URL = "/api";
 const TMDB_API_KEY = "1e2f039872a06c3b7e7bbb5c2d93888b";
 
 // Initialize Supabase
-const supabaseUrl = "https://zvopidktxwbicqkoxwhk.supabase.co";
-const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp2b3BpZGt0eHdiaWNxa294d2hrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY4MTQ4MjgsImV4cCI6MjA4MjM5MDgyOH0.WSVHJoMwcUvCvs72zbwDejFJfMq-qwYz6zohy8xftZc";
+const supabaseUrl = "https://zsvkcgjpvsdrhobtfydh.supabase.co";
+const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzdmtjZ2pwdnNkcmhvYnRmeWRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1NTQzNjYsImV4cCI6MjA5MzEzMDM2Nn0.sjGvvEx0-QwXaQ6n_E7SpHZnT-pY2PXhCuVrJsCG030";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default function MovieDetail() {

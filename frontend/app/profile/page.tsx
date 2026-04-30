@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { ArrowLeft, User, Trash2, Activity, Film, LogOut, AlertTriangle, BadgeCheck, BarChart3 } from "lucide-react";
 
 const API_URL = "/api";
-const supabase = createClient("https://zvopidktxwbicqkoxwhk.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp2b3BpZGt0eHdiaWNxa294d2hrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY4MTQ4MjgsImV4cCI6MjA4MjM5MDgyOH0.WSVHJoMwcUvCvs72zbwDejFJfMq-qwYz6zohy8xftZc");
+const supabase = createClient("https://zsvkcgjpvsdrhobtfydh.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzdmtjZ2pwdnNkcmhvYnRmeWRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1NTQzNjYsImV4cCI6MjA5MzEzMDM2Nn0.sjGvvEx0-QwXaQ6n_E7SpHZnT-pY2PXhCuVrJsCG030");
 
 export default function Profile() {
   const router = useRouter();

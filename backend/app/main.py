@@ -10,8 +10,8 @@ import random
 from thefuzz import process
 
 # --- CONFIG ---
-SUPABASE_URL = "https://zvopidktxwbicqkoxwhk.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp2b3BpZGt0eHdiaWNxa294d2hrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY4MTQ4MjgsImV4cCI6MjA4MjM5MDgyOH0.WSVHJoMwcUvCvs72zbwDejFJfMq-qwYz6zohy8xftZc"
+SUPABASE_URL = "https://zsvkcgjpvsdrhobtfydh.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzdmtjZ2pwdnNkcmhvYnRmeWRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1NTQzNjYsImV4cCI6MjA5MzEzMDM2Nn0.sjGvvEx0-QwXaQ6n_E7SpHZnT-pY2PXhCuVrJsCG030"
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -23,8 +23,11 @@ except Exception as e:
 
 # --- LOAD DATA ---
 try:
-    from app.recommender import get_popular_movies, hybrid_recommendation, movies, indices, cosine_sim
-except ImportError:
+    # Changed "app.recommender" to ".recommender" (relative import)
+    from .recommender import get_popular_movies, hybrid_recommendation, movies, indices, cosine_sim
+except Exception as e:
+    # Now it will scream at you in the terminal if it fails!
+    print(f"🚨 CRITICAL ERROR LOADING AI DATA: {e}") 
     movies = pd.DataFrame(columns=['movieId', 'title', 'genres', 'popularity'])
     def get_popular_movies(n=10): return []
     def hybrid_recommendation(mid, history=[]): return []
